@@ -5873,7 +5873,11 @@ Several C libraries are used, and their licenses are listed below:
         writable: false,
         value: response_info.headers
       });
-      for (let [header_name, header_value] of response_info.headers) {
+      let response_headers = response_info.headers || [];
+      if (!Array.isArray(response_headers)) {
+        response_headers = typeof response_headers[Symbol.iterator] === "function" ? response_headers : Object.entries(response_headers);
+      }
+      for (let [header_name, header_value] of response_headers) {
         response_obj.headers.append(header_name, header_value);
       }
       let response_proto = Object.getPrototypeOf(response_obj);
@@ -6427,8 +6431,12 @@ var LibcurlClient = class {
   }
   async request(remote, method, body, headers, signal) {
     let headersObj = {};
-    for (let [key, value] of headers) {
-      headersObj[key] = value;
+    if (headers) {
+      let entries = Array.isArray(headers) ? headers
+        : (typeof headers[Symbol.iterator] === "function" ? headers : Object.entries(headers));
+      for (let [key, value] of entries) {
+        headersObj[key] = value;
+      }
     }
     let payload = await this.session.fetch(remote.href, {
       method,
@@ -6446,8 +6454,12 @@ var LibcurlClient = class {
   }
   connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror) {
     let headersObj = {};
-    for (let [key, value] of requestHeaders) {
-      headersObj[key] = value;
+    if (requestHeaders) {
+      let entries = Array.isArray(requestHeaders) ? requestHeaders
+        : (typeof requestHeaders[Symbol.iterator] === "function" ? requestHeaders : Object.entries(requestHeaders));
+      for (let [key, value] of entries) {
+        headersObj[key] = value;
+      }
     }
     let socket = new libcurl.WebSocket(url.toString(), protocols, {
       headers: headersObj

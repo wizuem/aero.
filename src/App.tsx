@@ -47,7 +47,7 @@ function initScramjet(): Promise<void> {
     await connection.setTransport('/baremux/libcurl.js', [{ wisp: WISP_URL }]);
     const { ScramjetController } = controllerFactory();
     if (!navigator.serviceWorker.controller) {
-      await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.register('/sw.js?v=3');
       await new Promise<void>((resolve) => {
         if (navigator.serviceWorker.controller) { resolve(); return; }
         navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });

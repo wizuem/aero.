@@ -91,5 +91,16 @@ DROP POLICY IF EXISTS "Users can delete own history" ON public.user_history;
 CREATE POLICY "Users can delete own history" ON public.user_history FOR DELETE TO authenticated USING (auth.uid() = user_id);
 
 CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx ON public.chat_messages(created_at DESC);
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_publication_tables
+      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'chat_messages'
+    ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS user_bookmarks_user_id_idx ON public.user_bookmarks(user_id);
 CREATE INDEX IF NOT EXISTS user_history_user_id_idx ON public.user_history(user_id, visited_at DESC);

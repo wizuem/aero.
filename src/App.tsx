@@ -47,8 +47,9 @@ function initScramjet(): Promise<void> {
     const connection = new BareMux.BareMuxConnection('/baremux/worker.js');
     await connection.setTransport('/baremux/libcurl.js', [{ wisp: WISP_URL }]);
     const { ScramjetController } = controllerFactory();
-    const registration = await navigator.serviceWorker.register('/sw.js?v=5', { updateViaCache: 'none' });
+    const registration = await navigator.serviceWorker.register('/sw.js?v=6', { updateViaCache: 'none', scope: '/service/' });
     await registration.update();
+    await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) {
       await new Promise<void>((resolve) => {
         navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
@@ -240,7 +241,7 @@ function App() {
 function PageHeading({ eyebrow, title, body, action }: { eyebrow: string; title: string; body: string; action?: ReactNode }) { return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{body}</p></div>{action}</div>; }
 
 function HomePage({ navigate, openUrl, bookmarks, history, displayName, userEmail }: { navigate: (page: Page) => void; openUrl: (url: string, title?: string) => void; bookmarks: BookmarkItem[]; history: BookmarkItem[]; displayName: string; userEmail: string | null }) {
-  return <div className="home-page"><div className="hero-panel"><div className="hero-copy"><div className="eyebrow"><span className="live-pulse" />{userEmail ? 'SYNCED ACCOUNT' : 'YOUR PRIVATE SPACE'}</div><h1>Welcome back,<br /><em>{displayName}.</em></h1><p>One calm place for the web. Browse, play, connect, and make it yours.</p><div className="hero-actions"><button className="primary-button" onClick={() => navigate('browser')}><Compass size={17} /> Open browser</button><button className="ghost-button" onClick={() => navigate('games')}><Gamepad2 size={17} /> Play a game</button></div></div><div className="hero-orbit"><Logo /><div className="orbit-ring ring-one" /><div className="orbit-ring ring-two" /><span className="orbit-label label-one">private by design</span><span className="orbit-label label-two">1k+ games</span></div></div><div className="home-grid"><section className="surface-card quick-card"><div className="card-heading"><div><div className="eyebrow">QUICK START</div><h2>Where to next?</h2></div><Zap size={19} className="accent-icon" /></div><div className="quick-grid"><button onClick={() => navigate('browser')}><div className="quick-icon blue"><Globe2 size={19} /></div><span>Browse the web</span><small>Private & customizable</small></button><button onClick={() => navigate('games')}><div className="quick-icon orange"><Gamepad2 size={19} /></div><span>Play games</span><small>1,000+ titles ready</small></button><button onClick={() => navigate('chat')}><div className="quick-icon green"><MessageCircle size={19} /></div><span>Join the chat</span><small>Say hello to the room</small></button><button onClick={() => navigate('apps')}><div className="quick-icon pink"><AppWindow size={19} /></div><span>Open an app</span><small>Your favorites, together</small></button></div></section><section className="surface-card activity-card"><div className="card-heading"><div><div className="eyebrow">RECENT ACTIVITY</div><h2>Pick up where you left off</h2></div><button className="text-button" onClick={() => navigate('browser')}>View all</button></div>{history.length ? history.slice(0, 3).map((item) => <button className="activity-row" key={item.url} onClick={() => openUrl(item.url, item.title)}><div className="site-favicon"><Globe2 size={15} /></div><div><strong>{item.title}</strong><span>{item.url.replace(/^https?:\/\//, '')}</span></div><ArrowRight size={15} /></button>) : <div className="empty-state"><Clock3 size={19} /><span>Your browsing history will appear here.</span></div>}</section></div><section className="surface-card bookmark-strip"><div className="card-heading"><div><div className="eyebrow">SAVED FOR LATER</div><h2>Bookmarks</h2></div><button className="text-button" onClick={() => navigate('browser')}>Manage</button></div><div className="bookmark-list">{bookmarks.slice(0, 4).map((item) => <button key={item.url} onClick={() => openUrl(item.url, item.title)}><BookmarkCheck size={15} /><span>{item.title}</span><small>{item.url.replace(/^https?:\/\//, '').split('/')[0]}</small></button>)}</div></section></div>;
+  return <div className="home-page"><div className="hero-panel"><div className="hero-copy"><div className="eyebrow"><span className="live-pulse" />{userEmail ? 'SYNCED ACCOUNT' : 'YOUR PRIVATE SPACE'}</div><h1>Welcome back,<br /><em>{displayName}.</em></h1><p>One calm place for the web. Browse, play, connect, and make it yours.</p><div className="hero-actions"><button className="primary-button" onClick={() => navigate('browser')}><Compass size={17} /> Open browser</button><button className="ghost-button" onClick={() => navigate('games')}><Gamepad2 size={17} /> Play a game</button><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord</a></div></div><div className="hero-orbit"><Logo /><div className="orbit-ring ring-one" /><div className="orbit-ring ring-two" /><span className="orbit-label label-one">private by design</span><span className="orbit-label label-two">1k+ games</span></div></div><div className="home-grid"><section className="surface-card quick-card"><div className="card-heading"><div><div className="eyebrow">QUICK START</div><h2>Where to next?</h2></div><Zap size={19} className="accent-icon" /></div><div className="quick-grid"><button onClick={() => navigate('browser')}><div className="quick-icon blue"><Globe2 size={19} /></div><span>Browse the web</span><small>Private & customizable</small></button><button onClick={() => navigate('games')}><div className="quick-icon orange"><Gamepad2 size={19} /></div><span>Play games</span><small>1,000+ titles ready</small></button><button onClick={() => navigate('chat')}><div className="quick-icon green"><MessageCircle size={19} /></div><span>Join the chat</span><small>Say hello to the room</small></button><button onClick={() => navigate('apps')}><div className="quick-icon pink"><AppWindow size={19} /></div><span>Open an app</span><small>Your favorites, together</small></button></div></section><section className="surface-card activity-card"><div className="card-heading"><div><div className="eyebrow">RECENT ACTIVITY</div><h2>Pick up where you left off</h2></div><button className="text-button" onClick={() => navigate('browser')}>View all</button></div>{history.length ? history.slice(0, 3).map((item) => <button className="activity-row" key={item.url} onClick={() => openUrl(item.url, item.title)}><div className="site-favicon"><Globe2 size={15} /></div><div><strong>{item.title}</strong><span>{item.url.replace(/^https?:\/\//, '')}</span></div><ArrowRight size={15} /></button>) : <div className="empty-state"><Clock3 size={19} /><span>Your browsing history will appear here.</span></div>}</section></div><section className="surface-card bookmark-strip"><div className="card-heading"><div><div className="eyebrow">SAVED FOR LATER</div><h2>Bookmarks</h2></div><button className="text-button" onClick={() => navigate('browser')}>Manage</button></div><div className="bookmark-list">{bookmarks.slice(0, 4).map((item) => <button key={item.url} onClick={() => openUrl(item.url, item.title)}><BookmarkCheck size={15} /><span>{item.title}</span><small>{item.url.replace(/^https?:\/\//, '').split('/')[0]}</small></button>)}</div></section></div>;
 }
 
 function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActiveTab, newTab, closeTab, openUrl, toggleBookmark, isBookmarked, bookmarks, history }: { tabs: Tab[]; activeTab: number; currentTab: Tab; address: string; setAddress: (value: string) => void; setActiveTab: (id: number) => void; newTab: () => void; closeTab: (id: number) => void; openUrl: (url: string) => void; toggleBookmark: () => void; isBookmarked: boolean; bookmarks: BookmarkItem[]; history: BookmarkItem[] }) {
@@ -252,7 +253,11 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
   const submit = (event: FormEvent) => { event.preventDefault(); openUrl(address); };
 
   useEffect(() => {
-    if (currentTab.url === 'aero://home') return;
+    scramjetFrameRef.current = null;
+    if (currentTab.url === 'aero://home') {
+      setProxyState('idle');
+      return;
+    }
     let cancelled = false;
     setProxyState('loading');
     setProxyError('');
@@ -260,15 +265,15 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
       if (cancelled || !scramjetController || !frameRef.current) return;
       const frame = scramjetController.createFrame(frameRef.current);
       scramjetFrameRef.current = frame;
+      frame.addEventListener('urlchange', (e) => { if (!cancelled) setAddress(e.url); });
       frame.go(currentTab.url);
-      frame.addEventListener('urlchange', (e) => setAddress(e.url));
-      setProxyState('ready');
+      if (!cancelled) setProxyState('ready');
     }).catch((err) => {
       if (cancelled) return;
       setProxyState('error');
       setProxyError(err?.message || 'Failed to start proxy');
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; scramjetFrameRef.current = null; };
   }, [currentTab.url]);
 
   function handleReload() {
@@ -282,7 +287,20 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
 
 function BrowserHome({ openUrl }: { openUrl: (url: string, title?: string) => void }) { const [query, setQuery] = useState(''); return <div className="browser-home"><Logo /><div className="browser-wordmark">aero<span>.</span></div><p>A quieter way to explore.</p><form className="big-search" onSubmit={(event) => { event.preventDefault(); openUrl(query); }}><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search the web or enter a URL" /><kbd>⌘ K</kbd></form><div className="browser-suggestions"><span>Try</span><button onClick={() => openUrl('https://www.youtube.com', 'YouTube')}>YouTube</button><button onClick={() => openUrl('https://github.com', 'GitHub')}>GitHub</button><button onClick={() => openUrl('news.ycombinator.com', 'Hacker News')}>Hacker News</button></div></div>; }
 
-function GamesPage() { return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className="lumin-container"><div className="games-fallback"><div className="game-filters"><button className="active">Featured</button><button>Action</button><button>Arcade</button><button>Driving</button><button>Multiplayer</button></div><div className="game-placeholders">{['Geometry Dash', 'Moto X3M', 'Subway Surfers', '2048', 'Drift Hunters', 'Fireboy & Watergirl'].map((game, index) => <button className="game-tile" key={game} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(game + ' browser game')}`, '_blank', 'noopener,noreferrer')}><div className={`game-art art-${index + 1}`}><Gamepad2 size={27} /></div><strong>{game}</strong><span>Play now <ArrowRight size={13} /></span></button>)}</div></div></div></div>; }
+function GamesPage() {
+  useEffect(() => {
+    const script = document.querySelector('script[data-lumin]');
+    if (script) return;
+    const luminScript = document.createElement('script');
+    luminScript.src = 'https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js';
+    luminScript.async = true;
+    luminScript.dataset.lumin = 'true';
+    luminScript.onload = () => window.Lumin?.init({ container: '#games', theme: 'dark' });
+    document.body.appendChild(luminScript);
+    return () => { luminScript.remove(); };
+  }, []);
+  return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className="lumin-container"><div className="games-fallback"><div className="game-filters"><button className="active">Featured</button><button>Action</button><button>Arcade</button><button>Driving</button><button>Multiplayer</button></div><div className="game-placeholders">{['Geometry Dash', 'Moto X3M', 'Subway Surfers', '2048', 'Drift Hunters', 'Fireboy & Watergirl'].map((game, index) => <button className="game-tile" key={game} onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(game + ' browser game')}`, '_blank', 'noopener,noreferrer')}><div className={`game-art art-${index + 1}`}><Gamepad2 size={27} /></div><strong>{game}</strong><span>Play now <ArrowRight size={13} /></span></button>)}</div></div></div><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
+}
 
 function AppsPage({ openUrl, apps, setApps }: { openUrl: (url: string, title?: string) => void; apps: AppShortcut[]; setApps: (apps: AppShortcut[]) => void }) {
   const [editing, setEditing] = useState(false);

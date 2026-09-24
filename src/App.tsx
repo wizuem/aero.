@@ -49,7 +49,7 @@ function initScramjet(): Promise<void> {
     const { ScramjetController } = controllerFactory();
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.filter((item) => item.scope.endsWith('/service/')).map((item) => item.unregister()));
-    const registration = await navigator.serviceWorker.register('/sw.js?v=11', { updateViaCache: 'none', scope: '/' });
+    const registration = await navigator.serviceWorker.register('/sw.js?v=12', { updateViaCache: 'none', scope: '/' });
     await registration.update();
     if (!navigator.serviceWorker.controller) {
       await new Promise<void>((resolve) => {
@@ -111,7 +111,7 @@ function Logo({ small = false }: { small?: boolean }) {
 function App() {
   const [page, setPage] = useState<Page>('home');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [tabs, setTabs] = useState<Tab[]>([{ id: 1, title: 'New tab', url: 'aero://home' }]);
+  const [tabs, setTabs] = useState<Tab[]>([{ id: 1, title: 'aero.', url: 'aero://home' }]);
   const [activeTab, setActiveTab] = useState(1);
   const [address, setAddress] = useState('');
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>(() => JSON.parse(localStorage.getItem('odylian-bookmarks') || JSON.stringify(starterBookmarks)));
@@ -179,7 +179,7 @@ function App() {
       };
       queryUrl = `${searchUrls[engine] || searchUrls['Brave Search']}${encodeURIComponent(trimmed)}`;
     }
-    const nextTitle = title === 'Web page' ? (trimmed.replace(/^https?:\/\//, '').split('/')[0] || 'Web page') : title;
+    const nextTitle = 'aero.';
     setTabs((items) => items.map((tab) => tab.id === activeTab ? { ...tab, title: nextTitle, url: queryUrl } : tab));
     setAddress(queryUrl);
     setHistory((items) => [{ title: nextTitle, url: queryUrl }, ...items.filter((item) => item.url !== queryUrl)].slice(0, 30));
@@ -188,7 +188,7 @@ function App() {
 
   function newTab() {
     const id = Date.now();
-    setTabs((items) => [...items, { id, title: 'New tab', url: 'aero://home' }]);
+    setTabs((items) => [...items, { id, title: 'aero.', url: 'aero://home' }]);
     setActiveTab(id);
     setAddress('');
     setPage('browser');

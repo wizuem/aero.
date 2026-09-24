@@ -47,9 +47,16 @@ function initScramjet(): Promise<void> {
     const connection = new BareMux.BareMuxConnection('/baremux/worker.js');
     await connection.setTransport('/baremux/libcurl.js', [{ wisp: WISP_URL }]);
     const { ScramjetController } = controllerFactory();
-    const registration = await navigator.serviceWorker.register('/service/sw.js?v=8', { updateViaCache: 'none', scope: '/service/' });
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.filter((item) => item.scope.endsWith('/service/')).map((item) => item.unregister()));
+    const registration = await navigator.serviceWorker.register('/sw.js?v=11', { updateViaCache: 'none', scope: '/' });
     await registration.update();
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 150));
+    if (!navigator.serviceWorker.controller) {
+      await new Promise<void>((resolve) => {
+        const timeout = window.setTimeout(resolve, 4000);
+        navigator.serviceWorker.addEventListener('controllerchange', () => { window.clearTimeout(timeout); resolve(); }, { once: true });
+      });
+    }
     if (!sessionStorage.getItem('scramjet-db-cleaned')) {
       await new Promise<void>((resolve) => {
         const req = indexedDB.deleteDatabase('$scramjet');

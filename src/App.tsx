@@ -48,16 +48,14 @@ function initScramjet(): Promise<void> {
     await connection.setTransport('/baremux/libcurl.js', [{ wisp: WISP_URL }]);
     const { ScramjetController } = controllerFactory();
     const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.filter((item) => item.scope.endsWith('/service/')).map((item) => item.unregister()));
-    const registration = await navigator.serviceWorker.register('/sw.js?v=9', { updateViaCache: 'none', scope: '/' });
+    await Promise.all(registrations.filter((item) => item.scope === `${window.location.origin}/` || item.scope.endsWith('/service/')).map((item) => item.unregister()));
+    const registration = await navigator.serviceWorker.register('/sw.js?v=10', { updateViaCache: 'none', scope: '/service/' });
     await registration.update();
-    await navigator.serviceWorker.ready;
-    if (!navigator.serviceWorker.controller) {
-      await new Promise<void>((resolve) => {
-        navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
-        setTimeout(resolve, 3000);
-      });
-    }
+    await new Promise<void>((resolve) => {
+      if (registration.active) { resolve(); return; }
+      registration.addEventListener('updatefound', () => registration.installing?.addEventListener('statechange', () => registration.active && resolve(), { once: true }), { once: true });
+      window.setTimeout(resolve, 4000);
+    });
     if (!sessionStorage.getItem('scramjet-db-cleaned')) {
       await new Promise<void>((resolve) => {
         const req = indexedDB.deleteDatabase('$scramjet');
@@ -74,7 +72,7 @@ function initScramjet(): Promise<void> {
     });
     await Promise.race([
       scramjetController.init(),
-      new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('Scramjet initialization timed out')), 12000)),
+      new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('The browser proxy could not start. Refresh and try again.')), 12000)),
     ]);
   })();
   return scramjetReady;
@@ -336,8 +334,8 @@ function AppsPage({ openUrl, apps, setApps }: { openUrl: (url: string, title?: s
 function ChatPage({ displayName, setDisplayName, onUnreadChange }: { displayName: string; setDisplayName: (value: string) => void; onUnreadChange: (count: number) => void }) { const [messages, setMessages] = useState<ChatMessage[]>([]); const [body, setBody] = useState(''); const unreadRef = useRef(0); const channelRef = useRef<{ send: (message: { type: 'broadcast'; event: string; payload: ChatMessage }) => Promise<unknown> } | null>(null); const [loading, setLoading] = useState(true); const [onlineCount, setOnlineCount] = useState(0); useEffect(() => { let mounted = true; unreadRef.current = 0; onUnreadChange(0); (supabase ? supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(60) : Promise.resolve({ data: [], error: null })).then(({ data, error }) => { if (mounted) { setMessages((data as ChatMessage[]) || []); setLoading(false); if (error) console.error('[v0] Chat history failed:', error.message); } }); const channel = supabase?.channel('public-chat', { config: { presence: { key: displayName || 'Guest' } } });
     channelRef.current = channel || null;
     const addMessage = (message: ChatMessage) => setMessages((items) => { if (items.some((item) => item.id === message.id)) return items; if (message.display_name !== displayName) { unreadRef.current += 1; onUnreadChange(unreadRef.current); } return [...items, message]; });
-    const syncHistory = async () => { if (!supabase) return; const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(60); if (mounted && data) setMessages((items) => { const merged = [...items, ...(data as ChatMessage[])]; return Array.from(new Map(merged.map((item) => [item.id, item])).values()).sort((a, b) => a.created_at.localeCompare(b.created_at)); }); };
-    channel?.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => addMessage(payload.new as ChatMessage)).on('broadcast', { event: 'chat-message' }, ({ payload }) => addMessage(payload as ChatMessage)).on('presence', { event: 'sync' }, () => { if (mounted && channel) { const state = channel.presenceState(); setOnlineCount(Object.keys(state).length); } }).subscribe(async (status) => { if (status === 'SUBSCRIBED' && channel) await channel.track({ online_at: new Date().toISOString() }); });
+    const syncHistory = async () => { if (!supabase) return; const { data, error } = await supabase.from('chat_messages').select('id,display_name,body,created_at').order('created_at', { ascending: true }).limit(60); if (error) { console.error('[v0] Chat sync failed:', error.message); return; } if (mounted && data) setMessages((items) => { const merged = [...items, ...(data as ChatMessage[])]; return Array.from(new Map(merged.map((item) => [item.id, item])).values()).sort((a, b) => a.created_at.localeCompare(b.created_at)); }); };
+    channel?.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => addMessage(payload.new as ChatMessage)).on('broadcast', { event: 'chat-message' }, ({ payload }) => addMessage(payload as ChatMessage)).on('presence', { event: 'sync' }, () => { if (mounted && channel) { const state = channel.presenceState(); setOnlineCount(Object.keys(state).length); } }).subscribe(async (status) => { if (status === 'SUBSCRIBED' && channel) { await channel.track({ online_at: new Date().toISOString() }); await syncHistory(); } if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error('[v0] Chat realtime status:', status); });
     const poller = window.setInterval(syncHistory, 2500);
     return () => { mounted = false; channelRef.current = null; window.clearInterval(poller); if (channel) supabase?.removeChannel(channel); }; }, [displayName]); async function send(event: FormEvent) { event.preventDefault(); if (!body.trim()) return; const message = { display_name: displayName || 'Guest', body: body.trim() }; if (supabase) { const { data, error } = await supabase.from('chat_messages').insert(message).select().maybeSingle(); if (error) { console.error('[v0] Chat send failed:', error.message); return; } if (data) { const saved = data as ChatMessage; setMessages((items) => items.some((item) => item.id === saved.id) ? items : [...items, saved]); await channelRef.current?.send({ type: 'broadcast', event: 'chat-message', payload: saved }); } } else setMessages((items) => [...items, { ...message, id: String(Date.now()), created_at: new Date().toISOString() }]); setBody(''); } return <div className="chat-page"><PageHeading eyebrow="THE LOUNGE" title="Say hello." body="A small, friendly room for everyone in aero." action={<div className="chat-presence"><span className="status-dot" />{onlineCount} online</div>} /><div className="chat-layout"><section className="surface-card chat-card"><div className="chat-header"><div><strong>aero lounge</strong><span>Keep it kind. Keep it curious.</span></div><div className="chat-avatars"><span>{displayName.slice(0, 2).toUpperCase() || 'GU'}</span></div></div><div className="message-list">{loading ? <div className="empty-state">Loading the lounge...</div> : messages.length ? messages.map((message) => <div className="message" key={message.id}><div className="message-avatar">{message.display_name.slice(0, 2).toUpperCase()}</div><div><div className="message-meta"><strong>{message.display_name}</strong><span>{new Date(message.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div><p>{message.body}</p></div></div>) : <div className="empty-state"><MessageCircle size={19} /><span>No messages yet. Start the conversation.</span></div>}</div><form className="chat-input" onSubmit={send}><input value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write a message..." maxLength={500} /><button className="send-button" type="submit"><Send size={17} /></button></form></section><aside className="chat-side"><div className="surface-card profile-card"><div className="eyebrow">YOUR CHAT NAME</div><h3>How should people see you?</h3><input value={displayName} onChange={(event) => setDisplayName(event.target.value.slice(0, 24))} /><span>Shown next to your messages.</span></div><div className="surface-card community-card"><Bot size={19} /><strong>Be part of the signal</strong><p>aero is better when people make it their own. Share a shortcut, a game, or just a good thought.</p></div></aside></div></div>; }
 

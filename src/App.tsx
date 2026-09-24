@@ -56,6 +56,9 @@ function initScramjet(): Promise<void> {
         const timeout = window.setTimeout(resolve, 4000);
         navigator.serviceWorker.addEventListener('controllerchange', () => { window.clearTimeout(timeout); resolve(); }, { once: true });
       });
+      if (!navigator.serviceWorker.controller) throw new Error('Scramjet service worker did not take control');
+      window.location.reload();
+      return;
     }
     if (!sessionStorage.getItem('scramjet-db-cleaned')) {
       await new Promise<void>((resolve) => {

@@ -15,6 +15,6 @@ export default async function handler(request: Request): Promise<Response> {
     return Response.json({ text: result.text });
   } catch (error) {
     console.error('[aero] AI request failed', error);
-    return Response.json({ error: 'DeepSeek is unavailable right now.' }, { status: 500 });
+    return Response.json({ error: 'Gemini is unavailable right now. Check GEMINI_API_KEY and try again.' }, { status: 500 });
   }
 }

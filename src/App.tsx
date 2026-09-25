@@ -39,8 +39,12 @@ function loadScript(src: string): Promise<void> {
 function initScramjet(): Promise<void> {
   if (scramjetReady) return scramjetReady;
   scramjetReady = (async () => {
-    await loadScript('/baremux/index.js');
-    await loadScript('/scram/scramjet.all.js');
+    try {
+      await loadScript('/baremux/index.js?v=3');
+    } catch {
+      await loadScript('https://cdn.jsdelivr.net/npm/@mercuryworkshop/bare-mux@2.1.9/dist/index.js');
+    }
+    await loadScript('/scram/scramjet.all.js?v=3');
     const BareMux = window.BareMux;
     const controllerFactory = window.$scramjetLoadController;
     if (!BareMux || !controllerFactory) throw new Error('Scramjet scripts failed to initialize');
@@ -137,6 +141,15 @@ function App() {
   useEffect(() => { localStorage.setItem('odylian-search', searchEngine); }, [searchEngine]);
   useEffect(() => { localStorage.setItem('odylian-name', displayName); }, [displayName]);
   useEffect(() => { localStorage.setItem('aero-apps', JSON.stringify(appShortcuts)); }, [appShortcuts]);
+  useEffect(() => {
+    if (sessionStorage.getItem('aero-sw-recovered')) return;
+    navigator.serviceWorker?.getRegistrations().then((registrations) => {
+      const rootRegistrations = registrations.filter((registration) => registration.scope === `${window.location.origin}/`);
+      if (!rootRegistrations.length) return;
+      sessionStorage.setItem('aero-sw-recovered', '1');
+      Promise.all(rootRegistrations.map((registration) => registration.unregister())).then(() => window.location.reload());
+    });
+  }, []);
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
@@ -310,19 +323,11 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
 function BrowserHome({ openUrl }: { openUrl: (url: string, title?: string) => void }) { const [query, setQuery] = useState(''); return <div className="browser-home"><Logo /><div className="browser-wordmark">aero<span>.</span></div><p>A quieter way to explore.</p><form className="big-search" onSubmit={(event) => { event.preventDefault(); openUrl(query); }}><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search aero. or enter a URL" /><kbd>⌘ K</kbd></form><div className="browser-suggestions"><span>Try</span><button onClick={() => openUrl('https://www.youtube.com', 'YouTube')}>YouTube</button><button onClick={() => openUrl('https://github.com', 'GitHub')}>GitHub</button><button onClick={() => openUrl('news.ycombinator.com', 'Hacker News')}>Hacker News</button></div></div>; }
 
 function GamesPage() {
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.lumin.casa/sdk.js';
-    script.async = true;
-    script.onload = () => window.Lumin?.init({ container: '#games', theme: 'dark' });
-    document.head.appendChild(script);
-    return () => { script.remove(); };
-  }, []);
   return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className="lumin-container"><div className="games-fallback"><div className="game-filters"><button className="active">Featured</button><button>Action</button><button>Arcade</button><button>Driving</button><button>Multiplayer</button></div><div className="game-placeholders">{['Geometry Dash', 'Moto X3M', 'Subway Surfers', '2048', 'Drift Hunters', 'Fireboy & Watergirl'].map((game, index) => <a className="game-tile" href={`https://www.google.com/search?q=${encodeURIComponent(`${game} browser game`)}`} target="_blank" rel="noreferrer" key={game}><div className={`game-art art-${index + 1}`}><Gamepad2 size={27} /></div><strong>{game}</strong><span>Find game <ArrowRight size={13} /></span></a>)}</div></div></div><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
 }
 
 function MoviesPage() {
-  return <div className="movies-page"><PageHeading eyebrow="WATCH" title="Movies, inside aero." body="A focused place to find something worth watching." /><div className="movie-frame-wrap"><div className="embed-fallback"><p>If the embedded player is blocked by the provider, open it directly.</p><a className="ghost-button" href="https://watch.spencerdevs.xyz" target="_blank" rel="noreferrer">Open movies</a></div><iframe className="movie-frame" title="Aero Movies" src="https://watch.spencerdevs.xyz" allow="fullscreen; autoplay; encrypted-media" /></div></div>;
+  return <div className="movies-page"><PageHeading eyebrow="WATCH" title="Movies, inside aero." body="A focused place to find something worth watching." /><div className="movie-frame-wrap"><div className="movie-launcher"><Film size={34} /><h2>Watch inside aero.</h2><p>The movie provider blocks embedded frames, so open the player in this Aero tab instead of showing a blank frame.</p><a className="primary-button" href="https://watch.spencerdevs.xyz" target="_self">Open movie library</a></div></div></div>;
 }
 
 function AIPage() {
@@ -338,11 +343,11 @@ function AIPage() {
     try {
       const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: next }) });
       const data = await response.json();
-      setMessages([...next, { role: 'assistant', content: data.text || data.error || 'DeepSeek did not return a response.' }]);
+      setMessages([...next, { role: 'assistant', content: data.text || data.error || 'Gemini did not return a response.' }]);
     } catch { setMessages([...next, { role: 'assistant', content: 'The AI service could not be reached.' }]); }
     finally { setLoading(false); }
   }
-  return <div className="ai-page"><PageHeading eyebrow="DEEPSEEK" title="Think with aero." body="A private-feeling AI workspace powered by DeepSeek." /><div className="ai-panel"><div className="ai-messages">{messages.length === 0 && <div className="ai-empty"><Bot size={28} /><strong>Ask DeepSeek anything.</strong><span>Writing, ideas, explanations, and more.</span></div>}{messages.map((message, index) => <div className={`ai-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'user' ? 'You' : 'DeepSeek'}</span><p>{message.content}</p></div>)}{loading && <div className="ai-message assistant"><span>DeepSeek</span><p className="ai-thinking">Thinking…</p></div>}</div><form className="ai-input" onSubmit={send}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Message DeepSeek…" aria-label="Message DeepSeek" /><button className="primary-button" type="submit" disabled={loading || !input.trim()}><Send size={16} /> Send</button></form></div></div>;
+  return <div className="ai-page"><PageHeading eyebrow="GEMINI" title="Think with aero." body="A private-feeling AI workspace powered by Gemini." /><div className="ai-panel"><div className="ai-messages">{messages.length === 0 && <div className="ai-empty"><Bot size={28} /><strong>Ask Gemini anything.</strong><span>Writing, ideas, explanations, and more.</span></div>}{messages.map((message, index) => <div className={`ai-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'user' ? 'You' : 'Gemini'}</span><p>{message.content}</p></div>)}{loading && <div className="ai-message assistant"><span>DeepSeek</span><p className="ai-thinking">Thinking…</p></div>}</div><form className="ai-input" onSubmit={send}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Message DeepSeek…" aria-label="Message DeepSeek" /><button className="primary-button" type="submit" disabled={loading || !input.trim()}><Send size={16} /> Send</button></form></div></div>;
 }
 
 function AppsPage({ openUrl, apps, setApps }: { openUrl: (url: string, title?: string) => void; apps: AppShortcut[]; setApps: (apps: AppShortcut[]) => void }) {

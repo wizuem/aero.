@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   AppWindow, ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, Bot, Check,
-  ChevronDown, Clock3, Compass, Gamepad2, Globe2, History, Home,
+  ChevronDown, Clock3, Compass, Film, Gamepad2, Globe2, History, Home,
   LayoutGrid, Menu, MessageCircle, MoreHorizontal, PanelLeftClose,
   PanelLeftOpen, Plus, RefreshCw, Search, Send, Settings, ShieldCheck,
   Sparkles, UserRound, X, Zap, LogIn, LogOut
@@ -9,7 +9,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { SettingsWorkspace } from '@/components/SettingsWorkspace';
 
-type Page = 'home' | 'browser' | 'games' | 'apps' | 'settings';
+type Page = 'home' | 'browser' | 'games' | 'movies' | 'apps' | 'settings';
 type Tab = { id: number; title: string; url: string };
 type BookmarkItem = { title: string; url: string };
 type AppShortcut = { name: string; tag: string; color: string; letter: string; url: string };
@@ -86,6 +86,7 @@ const navItems: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'browser', label: 'Browser', icon: Compass },
   { id: 'games', label: 'Games', icon: Gamepad2 },
+  { id: 'movies', label: 'Movies', icon: Film },
   { id: 'apps', label: 'Apps', icon: LayoutGrid },
 ];
 
@@ -149,6 +150,14 @@ function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
   useEffect(() => {
+    const confirmLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = 'Are you sure you want to leave aero.?';
+    };
+    window.addEventListener('beforeunload', confirmLeave);
+    return () => window.removeEventListener('beforeunload', confirmLeave);
+  }, []);
+  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(''), 2600);
     return () => window.clearTimeout(timer);
@@ -196,6 +205,7 @@ function App() {
 
   function closeTab(id: number) {
     if (tabs.length === 1) return;
+    if (!window.confirm('Are you sure you want to close this aero. tab?')) return;
     const nextTabs = tabs.filter((tab) => tab.id !== id);
     setTabs(nextTabs);
     if (activeTab === id) setActiveTab(nextTabs[nextTabs.length - 1].id);
@@ -236,7 +246,7 @@ function App() {
       </aside>
       <main className="main-area">
         <header className="topbar"><button className="mobile-menu icon-button" onClick={() => setSidebarOpen((open) => !open)}><Menu size={20} /></button><div className="crumb"><Logo small /><span>aero</span><span className="crumb-sep">/</span><span className="muted">{page[0].toUpperCase() + page.slice(1)}</span></div><div className="top-actions"><button className="top-action" onClick={() => setAuthOpen(true)}><Sparkles size={15} /> <span>{userEmail ? 'Synced' : 'Sync data'}</span></button><button className="avatar mini" onClick={() => setAuthOpen(true)}><UserRound size={15} /></button></div></header>
-        <section className="page-content">{page === 'home' && <HomePage navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} />}{page === 'games' && <GamesPage openUrl={openUrl} />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
+        <section className="page-content">{page === 'home' && <HomePage navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} />}{page === 'games' && <GamesPage />}{page === 'movies' && <MoviesPage />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
       </main>
       {toast && <div className="toast"><Check size={16} />{toast}</div>}
       {authOpen && <AuthModal close={() => setAuthOpen(false)} onSignedIn={(username) => { setUserEmail(username); setDisplayName(username); setAuthOpen(false); setToast('Your aero space is synced'); }} />}
@@ -295,8 +305,20 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
 
 function BrowserHome({ openUrl }: { openUrl: (url: string, title?: string) => void }) { const [query, setQuery] = useState(''); return <div className="browser-home"><Logo /><div className="browser-wordmark">aero<span>.</span></div><p>A quieter way to explore.</p><form className="big-search" onSubmit={(event) => { event.preventDefault(); openUrl(query); }}><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search aero. or enter a URL" /><kbd>⌘ K</kbd></form><div className="browser-suggestions"><span>Try</span><button onClick={() => openUrl('https://www.youtube.com', 'YouTube')}>YouTube</button><button onClick={() => openUrl('https://github.com', 'GitHub')}>GitHub</button><button onClick={() => openUrl('news.ycombinator.com', 'Hacker News')}>Hacker News</button></div></div>; }
 
-function GamesPage({ openUrl }: { openUrl: (url: string, title?: string) => void }) {
-  return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className="lumin-container"><div className="games-fallback"><div className="game-filters"><button className="active">Featured</button><button>Action</button><button>Arcade</button><button>Driving</button><button>Multiplayer</button></div><div className="game-placeholders">{['Geometry Dash', 'Moto X3M', 'Subway Surfers', '2048', 'Drift Hunters', 'Fireboy & Watergirl'].map((game, index) => <button className="game-tile" key={game} onClick={() => openUrl(`https://www.google.com/search?q=${encodeURIComponent(game + ' browser game')}`, game)}><div className={`game-art art-${index + 1}`}><Gamepad2 size={27} /></div><strong>{game}</strong><span>Play now <ArrowRight size={13} /></span></button>)}</div></div></div><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
+function GamesPage() {
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.lumin.casa/sdk.js';
+    script.async = true;
+    script.onload = () => window.Lumin?.init({ container: '#games', theme: 'dark' });
+    document.head.appendChild(script);
+    return () => { script.remove(); };
+  }, []);
+  return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className="lumin-container" /><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
+}
+
+function MoviesPage() {
+  return <div className="movies-page"><PageHeading eyebrow="WATCH" title="Movies, inside aero." body="A focused place to find something worth watching." /><div className="movie-frame-wrap"><iframe className="movie-frame" title="Aero Movies" src="https://watch.spencerdevs.xyz" allow="fullscreen; autoplay; encrypted-media" /></div></div>;
 }
 
 function AppsPage({ openUrl, apps, setApps }: { openUrl: (url: string, title?: string) => void; apps: AppShortcut[]; setApps: (apps: AppShortcut[]) => void }) {

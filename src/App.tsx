@@ -9,7 +9,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { SettingsWorkspace } from '@/components/SettingsWorkspace';
 
-type Page = 'home' | 'browser' | 'games' | 'movies' | 'apps' | 'settings';
+type Page = 'home' | 'browser' | 'games' | 'movies' | 'ai' | 'apps' | 'settings';
 type Tab = { id: number; title: string; url: string };
 type BookmarkItem = { title: string; url: string };
 type AppShortcut = { name: string; tag: string; color: string; letter: string; url: string };
@@ -49,16 +49,19 @@ function initScramjet(): Promise<void> {
     const { ScramjetController } = controllerFactory();
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.filter((item) => item.scope.endsWith('/service/')).map((item) => item.unregister()));
-    const registration = await navigator.serviceWorker.register('/sw.js?v=13', { updateViaCache: 'none', scope: '/' });
+    const registration = await navigator.serviceWorker.register('/sw.js?v=15', { updateViaCache: 'none', scope: '/' });
     await registration.update();
     if (!navigator.serviceWorker.controller) {
       await new Promise<void>((resolve) => {
         const timeout = window.setTimeout(resolve, 4000);
         navigator.serviceWorker.addEventListener('controllerchange', () => { window.clearTimeout(timeout); resolve(); }, { once: true });
       });
+      if (!navigator.serviceWorker.controller && !sessionStorage.getItem('scramjet-control-reload')) {
+        sessionStorage.setItem('scramjet-control-reload', '1');
+        window.location.reload();
+        return;
+      }
       if (!navigator.serviceWorker.controller) throw new Error('Scramjet service worker did not take control');
-      window.location.reload();
-      return;
     }
     if (!sessionStorage.getItem('scramjet-db-cleaned')) {
       await new Promise<void>((resolve) => {
@@ -87,6 +90,7 @@ const navItems: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'browser', label: 'Browser', icon: Compass },
   { id: 'games', label: 'Games', icon: Gamepad2 },
   { id: 'movies', label: 'Movies', icon: Film },
+  { id: 'ai', label: 'AI', icon: Bot },
   { id: 'apps', label: 'Apps', icon: LayoutGrid },
 ];
 
@@ -246,7 +250,7 @@ function App() {
       </aside>
       <main className="main-area">
         <header className="topbar"><button className="mobile-menu icon-button" onClick={() => setSidebarOpen((open) => !open)}><Menu size={20} /></button><div className="crumb"><Logo small /><span>aero</span><span className="crumb-sep">/</span><span className="muted">{page[0].toUpperCase() + page.slice(1)}</span></div><div className="top-actions"><button className="top-action" onClick={() => setAuthOpen(true)}><Sparkles size={15} /> <span>{userEmail ? 'Synced' : 'Sync data'}</span></button><button className="avatar mini" onClick={() => setAuthOpen(true)}><UserRound size={15} /></button></div></header>
-        <section className="page-content">{page === 'home' && <HomePage navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} />}{page === 'games' && <GamesPage />}{page === 'movies' && <MoviesPage />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
+        <section className="page-content">{page === 'home' && <HomePage navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} />}{page === 'games' && <GamesPage />}{page === 'movies' && <MoviesPage />}{page === 'ai' && <AIPage />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
       </main>
       {toast && <div className="toast"><Check size={16} />{toast}</div>}
       {authOpen && <AuthModal close={() => setAuthOpen(false)} onSignedIn={(username) => { setUserEmail(username); setDisplayName(username); setAuthOpen(false); setToast('Your aero space is synced'); }} />}
@@ -314,11 +318,31 @@ function GamesPage() {
     document.head.appendChild(script);
     return () => { script.remove(); };
   }, []);
-  return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className="lumin-container" /><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
+  return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className="lumin-container"><div className="games-fallback"><div className="game-filters"><button className="active">Featured</button><button>Action</button><button>Arcade</button><button>Driving</button><button>Multiplayer</button></div><div className="game-placeholders">{['Geometry Dash', 'Moto X3M', 'Subway Surfers', '2048', 'Drift Hunters', 'Fireboy & Watergirl'].map((game, index) => <a className="game-tile" href={`https://www.google.com/search?q=${encodeURIComponent(`${game} browser game`)}`} target="_blank" rel="noreferrer" key={game}><div className={`game-art art-${index + 1}`}><Gamepad2 size={27} /></div><strong>{game}</strong><span>Find game <ArrowRight size={13} /></span></a>)}</div></div></div><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
 }
 
 function MoviesPage() {
-  return <div className="movies-page"><PageHeading eyebrow="WATCH" title="Movies, inside aero." body="A focused place to find something worth watching." /><div className="movie-frame-wrap"><iframe className="movie-frame" title="Aero Movies" src="https://watch.spencerdevs.xyz" allow="fullscreen; autoplay; encrypted-media" /></div></div>;
+  return <div className="movies-page"><PageHeading eyebrow="WATCH" title="Movies, inside aero." body="A focused place to find something worth watching." /><div className="movie-frame-wrap"><div className="embed-fallback"><p>If the embedded player is blocked by the provider, open it directly.</p><a className="ghost-button" href="https://watch.spencerdevs.xyz" target="_blank" rel="noreferrer">Open movies</a></div><iframe className="movie-frame" title="Aero Movies" src="https://watch.spencerdevs.xyz" allow="fullscreen; autoplay; encrypted-media" /></div></div>;
+}
+
+function AIPage() {
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  async function send(event: FormEvent) {
+    event.preventDefault();
+    const content = input.trim();
+    if (!content || loading) return;
+    const next = [...messages, { role: 'user' as const, content }];
+    setMessages(next); setInput(''); setLoading(true);
+    try {
+      const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: next }) });
+      const data = await response.json();
+      setMessages([...next, { role: 'assistant', content: data.text || data.error || 'DeepSeek did not return a response.' }]);
+    } catch { setMessages([...next, { role: 'assistant', content: 'The AI service could not be reached.' }]); }
+    finally { setLoading(false); }
+  }
+  return <div className="ai-page"><PageHeading eyebrow="DEEPSEEK" title="Think with aero." body="A private-feeling AI workspace powered by DeepSeek." /><div className="ai-panel"><div className="ai-messages">{messages.length === 0 && <div className="ai-empty"><Bot size={28} /><strong>Ask DeepSeek anything.</strong><span>Writing, ideas, explanations, and more.</span></div>}{messages.map((message, index) => <div className={`ai-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'user' ? 'You' : 'DeepSeek'}</span><p>{message.content}</p></div>)}{loading && <div className="ai-message assistant"><span>DeepSeek</span><p className="ai-thinking">Thinking…</p></div>}</div><form className="ai-input" onSubmit={send}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Message DeepSeek…" aria-label="Message DeepSeek" /><button className="primary-button" type="submit" disabled={loading || !input.trim()}><Send size={16} /> Send</button></form></div></div>;
 }
 
 function AppsPage({ openUrl, apps, setApps }: { openUrl: (url: string, title?: string) => void; apps: AppShortcut[]; setApps: (apps: AppShortcut[]) => void }) {

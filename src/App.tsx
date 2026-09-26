@@ -53,11 +53,20 @@ function initScramjet(): Promise<void> {
     await connection.setTransport('/baremux/libcurl.js', [{ wisp: WISP_URL }]);
     const { ScramjetController } = controllerFactory();
     const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.filter((item) => item.scope === `${window.location.origin}/` || item.scope.endsWith('/service/')).map((item) => item.unregister()));
-    const registration = await navigator.serviceWorker.register('/sw.js?v=17', { updateViaCache: 'none', scope: '/service/' });
+    await Promise.all(registrations.filter((item) => item.scope.endsWith('/service/')).map((item) => item.unregister()));
+    const registration = await navigator.serviceWorker.register('/sw.js?v=18', { updateViaCache: 'none', scope: '/service/' });
     await registration.update();
-    await navigator.serviceWorker.ready;
-    if (!registration.active && !registration.waiting) throw new Error('Scramjet service worker did not activate');
+    await new Promise<void>((resolve, reject) => {
+      if (registration.active) return resolve();
+      const worker = registration.installing || registration.waiting;
+      if (!worker) return reject(new Error('Scramjet service worker did not start'));
+      const onStateChange = () => {
+        if (worker.state === 'activated') { worker.removeEventListener('statechange', onStateChange); resolve(); }
+        if (worker.state === 'redundant') { worker.removeEventListener('statechange', onStateChange); reject(new Error('Scramjet service worker became redundant')); }
+      };
+      worker.addEventListener('statechange', onStateChange);
+    });
+    if (!registration.active) throw new Error('Scramjet service worker did not activate');
     if (!sessionStorage.getItem('scramjet-db-cleaned-v2')) {
       await new Promise<void>((resolve) => {
         const req = indexedDB.deleteDatabase('$scramjet');
@@ -104,7 +113,7 @@ const starterBookmarks: BookmarkItem[] = [
 ];
 
 function Logo({ small = false }: { small?: boolean }) {
-  return <div className={`brand-mark ${small ? 'brand-mark-small' : ''}`}><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Aero_bigger-uRZV4kcLcDtBz9I0AcTJFqKfZLLB5n.png" alt="Aero" /></div>;
+  return <div className={`brand-mark ${small ? 'brand-mark-small' : ''}`}><img src="/aero.svg" alt="Aero" /></div>;
 }
 
 function App() {

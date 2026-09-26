@@ -9,7 +9,8 @@ import {
 import { supabase } from '@/lib/supabase';
 import { SettingsWorkspace } from '@/components/SettingsWorkspace';
 
-type Page = 'home' | 'browser' | 'games' | 'movies' | 'ai' | 'apps' | 'settings';
+type Page = 'home' | 'browser' | 'games' | 'movies' | 'apps' | 'settings';
+type ProxyProvider = 'scramjet' | 'ultraviolet' | 'rammerhead';
 type Tab = { id: number; title: string; url: string };
 type BookmarkItem = { title: string; url: string };
 type AppShortcut = { name: string; tag: string; color: string; letter: string; url: string };
@@ -52,21 +53,10 @@ function initScramjet(): Promise<void> {
     await connection.setTransport('/baremux/libcurl.js', [{ wisp: WISP_URL }]);
     const { ScramjetController } = controllerFactory();
     const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.filter((item) => item.scope.endsWith('/service/')).map((item) => item.unregister()));
-    const registration = await navigator.serviceWorker.register('/sw.js?v=15', { updateViaCache: 'none', scope: '/' });
+    await Promise.all(registrations.filter((item) => item.scope === `${window.location.origin}/` || item.scope.endsWith('/service/')).map((item) => item.unregister()));
+    const registration = await navigator.serviceWorker.register('/sw.js?v=16', { updateViaCache: 'none', scope: '/service/' });
     await registration.update();
-    if (!navigator.serviceWorker.controller) {
-      await new Promise<void>((resolve) => {
-        const timeout = window.setTimeout(resolve, 4000);
-        navigator.serviceWorker.addEventListener('controllerchange', () => { window.clearTimeout(timeout); resolve(); }, { once: true });
-      });
-      if (!navigator.serviceWorker.controller && !sessionStorage.getItem('scramjet-control-reload')) {
-        sessionStorage.setItem('scramjet-control-reload', '1');
-        window.location.reload();
-        return;
-      }
-      if (!navigator.serviceWorker.controller) throw new Error('Scramjet service worker did not take control');
-    }
+    if (!registration.active && !registration.waiting) throw new Error('Scramjet service worker did not activate');
     if (!sessionStorage.getItem('scramjet-db-cleaned')) {
       await new Promise<void>((resolve) => {
         const req = indexedDB.deleteDatabase('$scramjet');
@@ -94,7 +84,6 @@ const navItems: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'browser', label: 'Browser', icon: Compass },
   { id: 'games', label: 'Games', icon: Gamepad2 },
   { id: 'movies', label: 'Movies', icon: Film },
-  { id: 'ai', label: 'AI', icon: Bot },
   { id: 'apps', label: 'Apps', icon: LayoutGrid },
 ];
 
@@ -128,6 +117,7 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('odylian-theme') || 'midnight');
   const [accent, setAccent] = useState(() => localStorage.getItem('odylian-accent') || 'cyan');
   const [searchEngine, setSearchEngine] = useState(() => localStorage.getItem('odylian-search') || 'Brave Search');
+  const [proxyProvider, setProxyProvider] = useState<ProxyProvider>(() => (localStorage.getItem('aero-proxy-provider') as ProxyProvider) || 'scramjet');
   const [displayName, setDisplayName] = useState(() => localStorage.getItem('odylian-name') || 'Guest');
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -139,17 +129,9 @@ function App() {
   useEffect(() => { localStorage.setItem('odylian-theme', theme); }, [theme]);
   useEffect(() => { localStorage.setItem('odylian-accent', accent); }, [accent]);
   useEffect(() => { localStorage.setItem('odylian-search', searchEngine); }, [searchEngine]);
+  useEffect(() => { localStorage.setItem('aero-proxy-provider', proxyProvider); }, [proxyProvider]);
   useEffect(() => { localStorage.setItem('odylian-name', displayName); }, [displayName]);
   useEffect(() => { localStorage.setItem('aero-apps', JSON.stringify(appShortcuts)); }, [appShortcuts]);
-  useEffect(() => {
-    if (sessionStorage.getItem('aero-sw-recovered')) return;
-    navigator.serviceWorker?.getRegistrations().then((registrations) => {
-      const rootRegistrations = registrations.filter((registration) => registration.scope === `${window.location.origin}/`);
-      if (!rootRegistrations.length) return;
-      sessionStorage.setItem('aero-sw-recovered', '1');
-      Promise.all(rootRegistrations.map((registration) => registration.unregister())).then(() => window.location.reload());
-    });
-  }, []);
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
@@ -262,7 +244,7 @@ function App() {
       </aside>
       <main className="main-area">
         <header className="topbar"><button className="mobile-menu icon-button" onClick={() => setSidebarOpen((open) => !open)}><Menu size={20} /></button><div className="crumb"><Logo small /><span>aero</span><span className="crumb-sep">/</span><span className="muted">{page[0].toUpperCase() + page.slice(1)}</span></div><div className="top-actions"><button className="top-action" onClick={() => setAuthOpen(true)}><Sparkles size={15} /> <span>{userEmail ? 'Synced' : 'Sync data'}</span></button><button className="avatar mini" onClick={() => setAuthOpen(true)}><UserRound size={15} /></button></div></header>
-        <section className="page-content">{page === 'home' && <HomePage navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} />}{page === 'games' && <GamesPage />}{page === 'movies' && <MoviesPage openUrl={openUrl} />}{page === 'ai' && <AIPage />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
+        <section className="page-content">{page === 'home' && <HomePage navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} proxyProvider={proxyProvider} />}{page === 'games' && <GamesPage />}{page === 'movies' && <MoviesPage openUrl={openUrl} />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} proxyProvider={proxyProvider} setProxyProvider={setProxyProvider} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
       </main>
       {toast && <div className="toast"><Check size={16} />{toast}</div>}
       {authOpen && <AuthModal close={() => setAuthOpen(false)} onSignedIn={(username) => { setUserEmail(username); setDisplayName(username); setAuthOpen(false); setToast('Your aero space is synced'); }} />}
@@ -276,7 +258,7 @@ function HomePage({ navigate, openUrl, bookmarks, history, displayName, userEmai
   return <div className="home-page"><div className="hero-panel"><div className="hero-copy"><div className="eyebrow"><span className="live-pulse" />{userEmail ? 'SYNCED ACCOUNT' : 'YOUR PRIVATE SPACE'}</div><h1>Welcome back,<br /><em>{displayName}.</em></h1><p>One calm place for the web. Browse, play, connect, and make it yours.</p><div className="hero-actions"><button className="primary-button" onClick={() => navigate('browser')}><Compass size={17} /> Open browser</button><button className="ghost-button" onClick={() => navigate('games')}><Gamepad2 size={17} /> Play a game</button><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord</a></div></div><div className="hero-orbit"><Logo /><div className="orbit-ring ring-one" /><div className="orbit-ring ring-two" /><span className="orbit-label label-one">private by design</span><span className="orbit-label label-two">1k+ games</span></div></div><div className="home-grid"><section className="surface-card quick-card"><div className="card-heading"><div><div className="eyebrow">QUICK START</div><h2>Where to next?</h2></div><Zap size={19} className="accent-icon" /></div><div className="quick-grid"><button onClick={() => navigate('browser')}><div className="quick-icon blue"><Globe2 size={19} /></div><span>Browse the web</span><small>Private & customizable</small></button><button onClick={() => navigate('games')}><div className="quick-icon orange"><Gamepad2 size={19} /></div><span>Play games</span><small>1,000+ titles ready</small></button><button onClick={() => navigate('settings')}><div className="quick-icon green"><Settings size={19} /></div><span>Customize aero.</span><small>Make it yours</small></button><button onClick={() => navigate('apps')}><div className="quick-icon pink"><AppWindow size={19} /></div><span>Open an app</span><small>Your favorites, together</small></button></div></section><section className="surface-card activity-card"><div className="card-heading"><div><div className="eyebrow">RECENT ACTIVITY</div><h2>Pick up where you left off</h2></div><button className="text-button" onClick={() => navigate('browser')}>View all</button></div>{history.length ? history.slice(0, 3).map((item) => <button className="activity-row" key={item.url} onClick={() => openUrl(item.url, item.title)}><div className="site-favicon"><Globe2 size={15} /></div><div><strong>{item.title}</strong><span>{item.url.replace(/^https?:\/\//, '')}</span></div><ArrowRight size={15} /></button>) : <div className="empty-state"><Clock3 size={19} /><span>Your browsing history will appear here.</span></div>}</section></div><section className="surface-card bookmark-strip"><div className="card-heading"><div><div className="eyebrow">SAVED FOR LATER</div><h2>Bookmarks</h2></div><button className="text-button" onClick={() => navigate('browser')}>Manage</button></div><div className="bookmark-list">{bookmarks.slice(0, 4).map((item) => <button key={item.url} onClick={() => openUrl(item.url, item.title)}><BookmarkCheck size={15} /><span>{item.title}</span><small>{item.url.replace(/^https?:\/\//, '').split('/')[0]}</small></button>)}</div></section></div>;
 }
 
-function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActiveTab, newTab, closeTab, openUrl, toggleBookmark, isBookmarked, bookmarks, history }: { tabs: Tab[]; activeTab: number; currentTab: Tab; address: string; setAddress: (value: string) => void; setActiveTab: (id: number) => void; newTab: () => void; closeTab: (id: number) => void; openUrl: (url: string) => void; toggleBookmark: () => void; isBookmarked: boolean; bookmarks: BookmarkItem[]; history: BookmarkItem[] }) {
+function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActiveTab, newTab, closeTab, openUrl, toggleBookmark, isBookmarked, bookmarks, history, proxyProvider }: { tabs: Tab[]; activeTab: number; currentTab: Tab; address: string; setAddress: (value: string) => void; setActiveTab: (id: number) => void; newTab: () => void; closeTab: (id: number) => void; openUrl: (url: string) => void; toggleBookmark: () => void; isBookmarked: boolean; bookmarks: BookmarkItem[]; history: BookmarkItem[]; proxyProvider: ProxyProvider }) {
   const [showPanel, setShowPanel] = useState(false);
   const [proxyState, setProxyState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [proxyError, setProxyError] = useState('');
@@ -293,6 +275,10 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
     let cancelled = false;
     setProxyState('loading');
     setProxyError('');
+    if (proxyProvider !== 'scramjet') {
+      setProxyState('ready');
+      return;
+    }
     initScramjet().then(() => {
       if (cancelled || !scramjetController || !frameRef.current) return;
       const frame = scramjetController.createFrame(frameRef.current);
@@ -308,7 +294,7 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
       setProxyError(err?.message || 'Failed to start proxy');
     });
     return () => { cancelled = true; scramjetFrameRef.current = null; };
-  }, [currentTab.url]);
+  }, [currentTab.url, proxyProvider]);
 
   function handleReload() {
     if (scramjetFrameRef.current) scramjetFrameRef.current.reload();
@@ -316,7 +302,7 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
   function handleBack() { scramjetFrameRef.current?.back(); }
   function handleForward() { scramjetFrameRef.current?.forward(); }
 
-  return <div className="browser-page"><div className="browser-toolbar"><div className="tab-row">{tabs.map((tab) => <button className={`browser-tab ${tab.id === activeTab ? 'selected' : ''}`} key={tab.id} onClick={() => { setActiveTab(tab.id); setAddress(tab.url === 'aero://home' ? '' : tab.url); }}><span className="tab-dot" />{tab.title}<X size={13} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }} /></button>)}<button className="new-tab" onClick={newTab}><Plus size={16} /></button></div><div className="browser-controls"><button className="icon-button" onClick={handleBack} aria-label="Back"><ArrowLeft size={17} /></button><button className="icon-button" onClick={handleForward} aria-label="Forward"><ArrowRight size={17} /></button><button className="icon-button" onClick={handleReload} aria-label="Refresh"><RefreshCw size={16} /></button><form className="address-bar" onSubmit={submit}><ShieldCheck size={15} /><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Search or enter a web address" /><button type="button" onClick={toggleBookmark} aria-label="Bookmark">{isBookmarked ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}</button></form><button className="icon-button" onClick={() => setShowPanel((open) => !open)}><MoreHorizontal size={18} /></button></div></div>{showPanel && <div className="browser-panel"><div className="eyebrow">YOUR LIBRARY</div><h3>Saved pages</h3>{bookmarks.map((item) => <button key={item.url} onClick={() => { openUrl(item.url); setShowPanel(false); }}><Bookmark size={14} />{item.title}</button>)}<div className="eyebrow panel-history">HISTORY</div>{history.slice(0, 4).map((item) => <button key={item.url} onClick={() => { openUrl(item.url); setShowPanel(false); }}><History size={14} />{item.title}</button>)}</div>}<div className="browser-stage">{proxyState === 'loading' && currentTab.url !== 'aero://home' && <div className="browser-status-card"><strong>Loading this page inside aero.</strong><span>The embedded browser is starting. If the site blocks proxy loading, use the Aero tab fallback below.</span></div>}{currentTab.url === 'aero://home' ? <BrowserHome openUrl={openUrl} /> : <><iframe ref={frameRef} title={currentTab.title} className="web-frame" hidden={proxyState === 'error'} />{proxyState === 'loading' && <div className="proxy-overlay"><div className="proxy-spinner" /><span>Connecting via scramjet…</span></div>}{proxyState === 'error' && <div className="proxy-overlay error"><ShieldCheck size={28} /><strong>Could not load this page</strong><span>{proxyError}</span><button className="ghost-button" onClick={handleReload}>Try again</button></div>}</>}</div></div>;
+  return <div className="browser-page"><div className="browser-toolbar"><div className="tab-row">{tabs.map((tab) => <button className={`browser-tab ${tab.id === activeTab ? 'selected' : ''}`} key={tab.id} onClick={() => { setActiveTab(tab.id); setAddress(tab.url === 'aero://home' ? '' : tab.url); }}><span className="tab-dot" />{tab.title}<X size={13} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }} /></button>)}<button className="new-tab" onClick={newTab}><Plus size={16} /></button></div><div className="browser-controls"><button className="icon-button" onClick={handleBack} aria-label="Back"><ArrowLeft size={17} /></button><button className="icon-button" onClick={handleForward} aria-label="Forward"><ArrowRight size={17} /></button><button className="icon-button" onClick={handleReload} aria-label="Refresh"><RefreshCw size={16} /></button><form className="address-bar" onSubmit={submit}><ShieldCheck size={15} /><input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Search or enter a web address" /><button type="button" onClick={toggleBookmark} aria-label="Bookmark">{isBookmarked ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}</button></form><button className="icon-button" onClick={() => setShowPanel((open) => !open)}><MoreHorizontal size={18} /></button></div></div>{showPanel && <div className="browser-panel"><div className="eyebrow">YOUR LIBRARY</div><h3>Saved pages</h3>{bookmarks.map((item) => <button key={item.url} onClick={() => { openUrl(item.url); setShowPanel(false); }}><Bookmark size={14} />{item.title}</button>)}<div className="eyebrow panel-history">HISTORY</div>{history.slice(0, 4).map((item) => <button key={item.url} onClick={() => { openUrl(item.url); setShowPanel(false); }}><History size={14} />{item.title}</button>)}</div>}<div className="browser-stage">{proxyState === 'loading' && currentTab.url !== 'aero://home' && <div className="browser-status-card"><strong>Loading this page inside aero.</strong><span>The embedded browser is starting. If the site blocks proxy loading, use the Aero tab fallback below.</span></div>}{currentTab.url === 'aero://home' ? <BrowserHome openUrl={openUrl} /> : <><iframe ref={frameRef} title={currentTab.title} className="web-frame" src={proxyProvider !== 'scramjet' && currentTab.url !== 'aero://home' ? currentTab.url : undefined} hidden={proxyState === 'error'} onLoad={() => proxyProvider !== 'scramjet' && setProxyState('ready')} />{proxyState === 'loading' && <div className="proxy-overlay"><div className="proxy-spinner" /><span>Connecting via scramjet…</span></div>}{proxyState === 'error' && <div className="proxy-overlay error"><ShieldCheck size={28} /><strong>Could not load this page</strong><span>{proxyError}</span><button className="ghost-button" onClick={handleReload}>Try again</button></div>}</>}</div></div>;
 }
 
 function BrowserHome({ openUrl }: { openUrl: (url: string, title?: string) => void }) { const [query, setQuery] = useState(''); return <div className="browser-home"><Logo /><div className="browser-wordmark">aero<span>.</span></div><p>A quieter way to explore.</p><form className="big-search" onSubmit={(event) => { event.preventDefault(); openUrl(query); }}><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search aero. or enter a URL" /><kbd>⌘ K</kbd></form><div className="browser-suggestions"><span>Try</span><button onClick={() => openUrl('https://www.youtube.com', 'YouTube')}>YouTube</button><button onClick={() => openUrl('https://github.com', 'GitHub')}>GitHub</button><button onClick={() => openUrl('news.ycombinator.com', 'Hacker News')}>Hacker News</button></div></div>; }
@@ -334,7 +320,7 @@ function GamesPage() {
 }
 
 function MoviesPage({ openUrl }: { openUrl: (url: string, title?: string) => void }) {
-  return <div className="movies-page"><PageHeading eyebrow="WATCH" title="Movies, inside aero." body="A focused place to find something worth watching." /><div className="movie-frame-wrap"><iframe className="movie-frame" title="Sflix movie library" src="https://sflix.pw" allow="fullscreen; autoplay; encrypted-media" /><div className="embed-fallback"><span>If Sflix blocks embedding, open it in an Aero browser tab.</span><button className="ghost-button" type="button" onClick={() => openUrl('https://sflix.pw', 'Sflix')}>Open in Aero tab</button></div></div></div>;
+  return <div className="movies-page"><PageHeading eyebrow="WATCH" title="Movies, inside aero." body="A focused place to find something worth watching." /><div className="movie-frame-wrap"><iframe className="movie-frame" title="Sflix movie library" src="https://watch.spencerdevs.xyz" allow="fullscreen; autoplay; encrypted-media" /><div className="embed-fallback"><span>If Sflix blocks embedding, open it in an Aero browser tab.</span><button className="ghost-button" type="button" onClick={() => openUrl('https://sflix.pw', 'Sflix')}>Open in Aero tab</button></div></div></div>;
 }
 
 function AIPage() {

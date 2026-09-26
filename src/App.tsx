@@ -277,13 +277,14 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
     setProxyState('loading');
     setProxyError('');
     if (proxyProvider !== 'scramjet') {
-      setProxyState('ready');
+      setProxyState('error');
+      setProxyError(`${proxyProvider === 'ultraviolet' ? 'Ultraviolet' : 'Rammerhead'} is not configured in this Aero build yet. Select Scramjet in Settings to browse.`);
       return;
     }
     const timeout = window.setTimeout(() => {
       if (!cancelled) {
         setProxyState('error');
-        setProxyError('Scramjet is taking too long to connect. Try Refresh or choose another browser engine in Settings.');
+        setProxyError('Scramjet is taking too long to connect. Try again or select Scramjet in Settings.');
       }
     }, 3000);
     initScramjet().then(() => {

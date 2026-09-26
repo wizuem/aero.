@@ -245,7 +245,7 @@ function App() {
       </aside>
       <main className="main-area">
         <header className="topbar"><button className="mobile-menu icon-button" onClick={() => setSidebarOpen((open) => !open)}><Menu size={20} /></button><div className="crumb"><Logo small /><span>aero</span><span className="crumb-sep">/</span><span className="muted">{page[0].toUpperCase() + page.slice(1)}</span></div><div className="top-actions"><button className="top-action" onClick={() => setAuthOpen(true)}><Sparkles size={15} /> <span>{userEmail ? 'Synced' : 'Sync data'}</span></button><button className="avatar mini" onClick={() => setAuthOpen(true)}><UserRound size={15} /></button></div></header>
-        <section className="page-content">{page === 'home' && <HomePage navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} proxyProvider={proxyProvider} />}{page === 'games' && <GamesPage />}{page === 'movies' && <MoviesPage openUrl={openUrl} />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} proxyProvider={proxyProvider} setProxyProvider={setProxyProvider} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
+        <section className="page-content">{page === 'home' && <HomePage key="home" navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage key="browser" tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} proxyProvider={proxyProvider} />}{page === 'games' && <GamesPage key="games" />}{page === 'movies' && <MoviesPage key="movies" openUrl={openUrl} />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div key="settings" className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} proxyProvider={proxyProvider} setProxyProvider={setProxyProvider} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
       </main>
       {toast && <div className="toast"><Check size={16} />{toast}</div>}
       {authOpen && <AuthModal close={() => setAuthOpen(false)} onSignedIn={(username) => { setUserEmail(username); setDisplayName(username); setAuthOpen(false); setToast('Your aero space is synced'); }} />}
@@ -280,21 +280,31 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
       setProxyState('ready');
       return;
     }
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) {
+        setProxyState('error');
+        setProxyError('Scramjet is taking too long to connect. Try Refresh or choose another browser engine in Settings.');
+      }
+    }, 3000);
     initScramjet().then(() => {
       if (cancelled || !scramjetController || !frameRef.current) return;
       const frame = scramjetController.createFrame(frameRef.current);
       scramjetFrameRef.current = frame;
       frame.addEventListener('urlchange', (e) => { if (!cancelled && e?.url) setAddress(e.url); });
       frame.go(currentTab.url);
-      if (!cancelled) setProxyState('ready');
+      if (!cancelled) {
+        window.clearTimeout(timeout);
+        setProxyState('ready');
+      }
     }).catch((err) => {
       if (cancelled) return;
       scramjetReady = null;
       scramjetController = null;
+      window.clearTimeout(timeout);
       setProxyState('error');
       setProxyError(err?.message || 'Failed to start proxy');
     });
-    return () => { cancelled = true; scramjetFrameRef.current = null; };
+    return () => { cancelled = true; window.clearTimeout(timeout); scramjetFrameRef.current = null; };
   }, [currentTab.url, proxyProvider]);
 
   function handleReload() {
@@ -309,15 +319,20 @@ function BrowserPage({ tabs, activeTab, currentTab, address, setAddress, setActi
 function BrowserHome({ openUrl }: { openUrl: (url: string, title?: string) => void }) { const [query, setQuery] = useState(''); return <div className="browser-home"><Logo /><div className="browser-wordmark">aero<span>.</span></div><p>A quieter way to explore.</p><form className="big-search" onSubmit={(event) => { event.preventDefault(); openUrl(query); }}><Search size={18} /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search aero. or enter a URL" /><kbd>⌘ K</kbd></form><div className="browser-suggestions"><span>Try</span><button onClick={() => openUrl('https://www.youtube.com', 'YouTube')}>YouTube</button><button onClick={() => openUrl('https://github.com', 'GitHub')}>GitHub</button><button onClick={() => openUrl('news.ycombinator.com', 'Hacker News')}>Hacker News</button></div></div>; }
 
 function GamesPage() {
+  const [gamesReady, setGamesReady] = useState(false);
   useEffect(() => {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js';
     script.async = true;
-    script.onload = () => window.Lumin?.init({ container: '#games', theme: 'dark' });
+    script.onload = () => { window.Lumin?.init({ container: '#games', theme: 'dark' }); setGamesReady(true); };
     document.head.appendChild(script);
-    return () => script.remove();
+    return () => {
+      script.remove();
+      const container = document.getElementById('games');
+      if (container) container.replaceChildren();
+    };
   }, []);
-  return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className="lumin-container"><div className="games-fallback"><div className="game-filters"><button className="active">Featured</button><button>Action</button><button>Arcade</button><button>Driving</button><button>Multiplayer</button></div><div className="game-placeholders">{['Geometry Dash', 'Moto X3M', 'Subway Surfers', '2048', 'Drift Hunters', 'Fireboy & Watergirl'].map((game, index) => <a className="game-tile" href={`https://www.google.com/search?q=${encodeURIComponent(`${game} browser game`)}`} target="_blank" rel="noreferrer" key={game}><div className={`game-art art-${index + 1}`}><Gamepad2 size={27} /></div><strong>{game}</strong><span>Find game <ArrowRight size={13} /></span></a>)}</div></div></div><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
+  return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className={`lumin-container ${gamesReady ? 'games-ready' : 'games-loading'}`}>{!gamesReady && <div className="games-loading-state">Loading the arcade…</div>}{gamesReady && <div className="games-fallback"><div className="game-filters"><button className="active">Featured</button><button>Action</button><button>Arcade</button><button>Driving</button><button>Multiplayer</button></div><div className="game-placeholders">{['Geometry Dash', 'Moto X3M', 'Subway Surfers', '2048', 'Drift Hunters', 'Fireboy & Watergirl'].map((game, index) => <a className="game-tile" href={`https://www.google.com/search?q=${encodeURIComponent(`${game} browser game`)}`} target="_blank" rel="noreferrer" key={game}><div className={`game-art art-${index + 1}`}><Gamepad2 size={27} /></div><strong>{game}</strong><span>Find game <ArrowRight size={13} /></span></a>)}</div></div>}</div><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
 }
 
 function MoviesPage({ openUrl }: { openUrl: (url: string, title?: string) => void }) {

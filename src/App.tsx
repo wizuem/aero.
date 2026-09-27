@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   AppWindow, ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, Bot, Check,
-  ChevronDown, Clock3, Compass, Film, Gamepad2, Globe2, History, Home,
+  ChevronDown, Clock3, Compass, Gamepad2, Globe2, History, Home,
   LayoutGrid, Menu, MessageCircle, MoreHorizontal, PanelLeftClose,
   PanelLeftOpen, Plus, RefreshCw, Search, Send, Settings, ShieldCheck,
   Sparkles, UserRound, X, Zap, LogIn, LogOut
@@ -9,7 +9,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { SettingsWorkspace } from '@/components/SettingsWorkspace';
 
-type Page = 'home' | 'browser' | 'games' | 'movies' | 'apps' | 'settings';
+type Page = 'home' | 'browser' | 'games' | 'chat' | 'ai' | 'apps' | 'settings';
 type ProxyProvider = 'scramjet' | 'ultraviolet' | 'rammerhead';
 type Tab = { id: number; title: string; url: string };
 type BookmarkItem = { title: string; url: string };
@@ -93,7 +93,8 @@ const navItems: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'browser', label: 'Browser', icon: Compass },
   { id: 'games', label: 'Games', icon: Gamepad2 },
-  { id: 'movies', label: 'Movies', icon: Film },
+  { id: 'chat', label: 'Chat', icon: MessageCircle },
+  { id: 'ai', label: 'AI', icon: Bot },
   { id: 'apps', label: 'Apps', icon: LayoutGrid },
 ];
 
@@ -254,7 +255,7 @@ function App() {
       </aside>
       <main className="main-area">
         <header className="topbar"><button className="mobile-menu icon-button" onClick={() => setSidebarOpen((open) => !open)}><Menu size={20} /></button><div className="crumb"><Logo small /><span>aero</span><span className="crumb-sep">/</span><span className="muted">{page[0].toUpperCase() + page.slice(1)}</span></div><div className="top-actions"><button className="top-action" onClick={() => setAuthOpen(true)}><Sparkles size={15} /> <span>{userEmail ? 'Synced' : 'Sync data'}</span></button><button className="avatar mini" onClick={() => setAuthOpen(true)}><UserRound size={15} /></button></div></header>
-        <section className="page-content">{page === 'home' && <HomePage key="home" navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage key="browser" tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} proxyProvider={proxyProvider} />}{page === 'games' && <GamesPage key="games" />}{page === 'movies' && <MoviesPage key="movies" openUrl={openUrl} />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div key="settings" className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} proxyProvider={proxyProvider} setProxyProvider={setProxyProvider} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
+        <section className="page-content">{page === 'home' && <HomePage key="home" navigate={navigate} openUrl={openUrl} bookmarks={bookmarks} history={history} displayName={displayName} userEmail={userEmail} />}{page === 'browser' && <BrowserPage key="browser" tabs={tabs} activeTab={activeTab} currentTab={currentTab} address={address} setAddress={setAddress} setActiveTab={setActiveTab} newTab={newTab} closeTab={closeTab} openUrl={openUrl} toggleBookmark={toggleBookmark} isBookmarked={isBookmarked} bookmarks={bookmarks} history={history} proxyProvider={proxyProvider} />}{page === 'games' && <GamesPage key="games" />}{page === 'chat' && <ChatPage displayName={displayName} setDisplayName={setDisplayName} />}{page === 'ai' && <AIPage key="ai" />}{page === 'apps' && <AppsPage openUrl={openUrl} apps={appShortcuts} setApps={setAppShortcuts} />}{page === 'settings' && <div key="settings" className="settings-page"><PageHeading eyebrow="PREFERENCES" title="Make it yours." body="Small choices, a space that feels like you." /><SettingsWorkspace theme={theme} setTheme={setTheme} accent={accent} setAccent={setAccent} searchEngine={searchEngine} setSearchEngine={setSearchEngine} proxyProvider={proxyProvider} setProxyProvider={setProxyProvider} displayName={displayName} setDisplayName={setDisplayName} onSignIn={() => setAuthOpen(true)} /></div>} </section>
       </main>
       {toast && <div className="toast"><Check size={16} />{toast}</div>}
       {authOpen && <AuthModal close={() => setAuthOpen(false)} onSignedIn={(username) => { setUserEmail(username); setDisplayName(username); setAuthOpen(false); setToast('Your aero space is synced'); }} />}
@@ -345,9 +346,6 @@ function GamesPage() {
   return <div className="games-page"><PageHeading eyebrow="THE ARCADE" title="Play something new." body="A thousand little worlds, ready whenever you are." action={<div className="game-count"><strong>1k+</strong><span>browser games</span></div>} /><div id="games" className={`lumin-container ${gamesReady ? 'games-ready' : 'games-loading'}`}>{!gamesReady && <div className="games-loading-state">Loading the arcade…</div>}{gamesReady && <div className="games-fallback"><div className="game-filters"><button className="active">Featured</button><button>Action</button><button>Arcade</button><button>Driving</button><button>Multiplayer</button></div><div className="game-placeholders">{['Geometry Dash', 'Moto X3M', 'Subway Surfers', '2048', 'Drift Hunters', 'Fireboy & Watergirl'].map((game, index) => <a className="game-tile" href={`https://www.google.com/search?q=${encodeURIComponent(`${game} browser game`)}`} target="_blank" rel="noreferrer" key={game}><div className={`game-art art-${index + 1}`}><Gamepad2 size={27} /></div><strong>{game}</strong><span>Find game <ArrowRight size={13} /></span></a>)}</div></div>}</div><a className="ghost-button support-link" href="https://discord.gg/cAcAyrEEv" target="_blank" rel="noreferrer"><MessageCircle size={15} /> Join Discord for support and links</a></div>;
 }
 
-function MoviesPage({ openUrl }: { openUrl: (url: string, title?: string) => void }) {
-  return <div className="movies-page"><PageHeading eyebrow="WATCH" title="Movies, inside aero." body="A focused place to find something worth watching." /><div className="movie-frame-wrap"><iframe className="movie-frame" title="Watch movie library" src="https://watch.spencerdevs.xyz" allow="fullscreen; autoplay; encrypted-media" /><div className="embed-fallback"><span>If Watch blocks embedding, open it in an Aero browser tab.</span><button className="ghost-button" type="button" onClick={() => openUrl('https://watch.spencerdevs.xyz', 'Watch')}>Open in Aero tab</button></div></div></div>;
-}
 
 function AIPage() {
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
